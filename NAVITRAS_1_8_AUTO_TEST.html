@@ -1,0 +1,579 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#14283c">
+<title>NAVITRAS 1.7 – ekran prowadzenia</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+*{box-sizing:border-box}body{margin:0;background:#102133;color:#fff;font-family:system-ui,Arial}
+header{padding:12px 16px;font-size:21px;font-weight:800}header small{font-size:11px;font-weight:400;color:#bdd0dd}
+#mapWrap{position:relative}#map{height:60dvh;min-height:310px;background:#cdd9d8}
+.maptools{position:absolute;z-index:1000;right:12px;top:12px;display:grid;gap:8px}
+.maptools button{width:50px;height:50px;padding:0;font-size:25px;box-shadow:0 2px 7px #0005;background:white;color:#102133}
+.maptools button.follow{background:#f4b63e}
+.panel{padding:14px;display:grid;gap:12px}
+label{font-size:13px;color:#d8e7f1}input,select{width:100%;padding:11px;border:1px solid #71869a;border-radius:9px;background:#fff;color:#102133;font-size:16px}
+.fields{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+button{background:#f4b63e;border:0;border-radius:10px;padding:12px;font-size:15px;font-weight:700;color:#102133;cursor:pointer}
+button.secondary{background:#dce9f0}button.outline{background:#223c53;color:#fff;border:1px solid #607e94}
+button:disabled{opacity:.5}h2{font-size:17px;margin:8px 0 0}
+#status,#routeInfo{font-size:13px;line-height:1.5;color:#cbdce8}
+.warning{font-size:12px;color:#ffd9a0}.hint{font-size:12px;color:#b5cfdf}
+.leaflet-control-zoom{display:none}
+.vehicle{width:24px;height:24px;background:#1477ed;border:3px solid white;border-radius:50%;box-shadow:0 0 0 2px #1477ed,0 2px 8px #0006;position:relative}
+.vehicle:before{content:'';position:absolute;top:-14px;left:5px;border-left:4px solid transparent;border-right:4px solid transparent;border-bottom:11px solid #1477ed;transform-origin:50% 24px;transform:rotate(var(--heading,0deg))}
+.line{display:flex;gap:8px;align-items:center}.line>*:first-child{flex:1}
+.stop{display:flex;gap:6px;align-items:center;margin-top:8px}.stop input{flex:1;min-width:0}
+.stop button{padding:9px 11px}.small{font-size:12px;color:#b5cfdf}
+.card{border:1px solid #39566d;border-radius:12px;padding:12px;display:grid;gap:9px}
+.result{display:block;width:100%;text-align:left;background:#e6f1f8;margin:5px 0;font-size:13px;font-weight:500;line-height:1.4}
+#searchResults:empty{display:none}
+
+/* NAVITRAS – zapisane miejsca i podpowiedzi */
+.quickgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.quickgrid button{min-width:0;font-size:14px;padding:11px 7px}
+.saveditem{display:flex;gap:6px;align-items:center;padding:7px 0;border-bottom:1px solid #39566d}
+.saveditem .savedname{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px}
+.saveditem button{font-size:12px;padding:8px}
+#suggestions{display:none;border:1px solid #71869a;border-radius:9px;background:#fff;color:#102133;max-height:240px;overflow:auto}
+#suggestions button{display:block;background:white;border-bottom:1px solid #ddd;width:100%;text-align:left;font-size:13px;font-weight:500;border-radius:0;padding:10px}
+#suggestions button:hover{background:#e8f2fa}
+#suggestions .sub{display:block;color:#516778;font-size:11px;margin-top:3px}
+#navBanner{position:absolute;z-index:950;left:10px;right:72px;top:10px;background:#102133ed;color:white;padding:12px;border-radius:12px;display:none;pointer-events:none;font-weight:700;line-height:1.35}
+#navBanner small{display:block;font-size:12px;font-weight:400;color:#cbdce8}
+#routeChoices{display:none;position:absolute;z-index:1150;left:9px;right:9px;bottom:137px;background:#102133f2;border-radius:13px;padding:10px;box-shadow:0 2px 12px #0008}
+#routeChoices .choice{display:inline-block;width:auto;margin:3px;padding:8px;background:#314d65;font-size:12px}
+#routeChoices .choice.selected{background:#f4b63e;color:#14283c}
+#routeChoices .lead{background:#18834a;color:white;font-weight:750;font-size:17px;padding:12px 25px}
+#routeChoices .edit{background:#31506a;color:white}
+#routeChoices .details{font-size:12px;color:#d7e7f3;margin:4px 0}
+#routeChoices .rowActions{display:flex;gap:5px;flex-wrap:wrap;align-items:center}
+body.guiding #routeChoices{bottom:82px}
+#routeChoices{bottom:87px;left:7px;right:7px;padding:6px 7px;max-height:33vh;overflow-y:auto;border-radius:10px}
+#routeChoices .rowActions{display:flex;flex-wrap:nowrap;gap:4px}
+#routeChoices .rowActions button{flex:1;min-width:0;font-size:11px;padding:8px 3px;white-space:nowrap}
+#routeChoices .rowActions .lead{font-size:13px;padding:8px 3px}
+#routeChoiceButtons{display:flex;gap:3px;overflow-x:auto;padding:2px 0}
+#routeChoices .choice{flex:0 0 auto;font-size:10px;margin:1px;padding:6px}
+#routeChoices .details{display:none}
+#toggleChoices{display:block;margin:0 0 4px auto;padding:3px 8px;font-size:11px;background:#3b5368}
+#routeChoices.compact #routeChoiceButtons,#routeChoices.compact .details{display:none}
+#routeChoices.compact{max-height:65px}
+#recalcMap{position:absolute;z-index:1180;bottom:88px;left:50%;transform:translateX(-50%);background:#f4b63e;color:#13263a;font-weight:bold;font-size:14px;padding:12px 20px;box-shadow:0 2px 9px #0008;white-space:nowrap}
+#pinActions{bottom:85px;max-height:35vh;overflow:auto}
+#pinActions button{font-size:12px;padding:7px}
+</style>
+
+<style>
+html,body{height:100%;overflow:hidden}body{display:flex;flex-direction:column}
+header{flex:none;height:65px;display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:#0c1c2e}
+#mapWrap{flex:1;min-height:0}#map{height:100%;min-height:0}
+.panel{display:none;position:fixed;z-index:2200;inset:65px 0 0;background:#102133;overflow-y:auto;padding:16px 14px 45px}
+body.panel-open .panel{display:grid;align-content:start}
+#menuDrawer{display:none;position:fixed;z-index:2400;inset:65px 0 0;background:#102133;overflow-y:auto;padding:15px}
+body.menu-open #menuDrawer{display:block}
+#menuDrawer button{display:block;width:100%;text-align:left;margin:7px 0;background:#223d55;color:white;padding:15px}
+#menuDrawer .back{background:#f4b63e;color:#14283c}
+#menuDrawer h2{margin:10px 0 18px}
+#topSearch{position:absolute;z-index:1100;left:10px;right:75px;top:10px;background:white;color:#15283b;border-radius:12px;box-shadow:0 3px 12px #0004;display:flex;align-items:center;padding:3px 10px}
+#topSearch input{border:0;padding:10px 4px;min-width:0;flex:1}
+#topSearch button{padding:8px;background:#f4b63e}
+#topSuggestions{display:none;position:absolute;z-index:1250;top:65px;left:10px;right:75px;max-height:38vh;overflow:auto;background:white;border-radius:9px;box-shadow:0 3px 15px #0007}
+#topSuggestions button{display:block;width:100%;border-radius:0;background:white;border-bottom:1px solid #ddd;text-align:left;font-size:13px;font-weight:500}
+.maptools{top:86px}
+#navBanner{top:78px;right:72px}
+#bottomBar{position:absolute;z-index:1100;bottom:12px;left:9px;right:9px;background:#102133eb;border-radius:12px;padding:9px;display:flex;justify-content:space-between;gap:6px;align-items:center;font-size:12px}
+#bottomBar strong{font-size:20px}
+#bottomBar .speedUnknown{color:#ffd9a0}
+#pinActions{display:none;position:absolute;z-index:1300;bottom:85px;left:10px;right:10px;background:#102133f5;border-radius:12px;padding:12px;box-shadow:0 2px 12px #0007}
+#pinActions button{margin:3px;padding:9px}
+#pinActions p{margin:0 0 7px;font-size:13px}
+#bottomQuick{position:absolute;z-index:1100;bottom:82px;left:10px;display:flex;gap:5px}
+#bottomQuick button{padding:9px;font-size:12px;background:#193952;color:white}
+#vehicleQuick{font-size:12px}
+#menuToggle{padding:8px 15px;font-size:24px}
+#topSearch:focus-within{right:10px}
+#topSearch:focus-within ~ #topSuggestions{right:10px}
+#menuDrawer .menuNote{font-size:12px;color:#c3d4e1;line-height:1.5}
+#status{min-height:20px}
+@media(max-width:390px){header{font-size:18px}#bottomBar strong{font-size:17px}#bottomQuick button{font-size:11px;padding:7px}}
+</style>
+
+<style>
+/* NAVITRAS 1.6 – zwijana lista tras i pełnoekranowa edycja */
+#routeChoices{bottom:84px;left:8px;right:8px;max-height:42vh;padding:7px 9px;border:1px solid #49647a;border-radius:14px;background:#0b2237f4}
+#routeChoices.compact{max-height:88px}
+#toggleChoices{width:100%;text-align:left;font-size:13px;padding:6px 9px;background:transparent;color:#dbe9f6;margin:0 0 5px}
+#routeChoiceButtons{display:grid;gap:4px;overflow:auto;max-height:26vh}
+#routeChoices .choice{display:block;width:100%;text-align:left;margin:0;padding:9px 11px;background:#223f58;border-radius:8px;color:#f5fbff;font-size:12px;white-space:normal}
+#routeChoices .choice.selected{background:#1056b4;color:white;border-left:4px solid #36a5ff}
+#routeChoices .rowActions{display:flex;gap:6px}
+#routeChoices .rowActions button{font-size:12px;padding:10px 5px;border-radius:9px}
+#routeChoices .rowActions .lead{background:#098c42;font-size:13px}
+#routeChoices .rowActions #deleteRouteMap{background:#a62d36}
+#routeChoices.compact #routeChoiceButtons{display:none}
+#routeChoices.compact #toggleChoices{margin-bottom:2px}
+#editBanner{position:absolute;z-index:1180;top:77px;left:9px;right:75px;background:#1052b0ed;color:white;border-radius:10px;padding:10px 34px 10px 12px}
+#editBanner b{font-size:14px;display:block}
+#editBanner small{font-size:11px;line-height:1.3;display:block}
+#editBanner button{position:absolute;right:5px;top:5px;padding:5px;background:transparent;color:white}
+#editBar{position:absolute;z-index:1180;bottom:86px;left:8px;right:8px;gap:5px;padding:7px;border-radius:12px;background:#102133f2}
+#editBar button{flex:1;min-width:0;padding:10px 3px;font-size:11px;color:white;background:#31506a}
+#editBar #recalcMap{position:static;transform:none;box-shadow:none;background:#1468d9;color:white;white-space:normal}
+#editBar #saveEdit{background:#078842}
+body.editing #bottomQuick{display:none}
+body.editing #topSearch{display:none}
+body.guiding #routeChoices{display:none!important}
+@media(max-width:380px){#routeChoices .rowActions button{font-size:10px}#editBar button{font-size:10px}}
+</style>
+<style>
+/* Screenshot-inspired flat HUD, Leaflet 2D map; no false 3D claims */
+body{background:#121b2b}header{height:56px;background:#0c1422ef;border-bottom:1px solid #ffffff22}header span{letter-spacing:.5px}#topSearch{top:8px;left:10px;right:75px;background:#121c2b;color:#fff;border:1px solid #ffffff33}#topSearch input{background:transparent;color:white}#topSearch input::placeholder{color:#d0d7e4}#topSearch button{background:#2473d3;color:white}.maptools{top:auto;bottom:188px;right:auto;left:12px}.maptools button{border-radius:50%;background:#111c2c;color:#fff;border:1px solid #ffffff44;box-shadow:0 3px 10px #0009}.maptools button.follow{background:#1766bf;color:white}#bottomBar{display:none}#bottomQuick{bottom:93px}#bottomQuick button{border-radius:25px;background:#111a2bea;border:1px solid #ffffff33}#navHud{display:none;position:absolute;z-index:1150;top:12px;left:12px;right:12px;background:#101823f5;border-radius:19px;box-shadow:0 5px 16px #0008;padding:17px 20px;gap:20px;align-items:center;pointer-events:none}#hudArrow{font-size:65px;font-weight:800;line-height:1;color:white}#hudDistance{font-size:33px}#hudRoad{font-size:20px;font-weight:700;max-width:240px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}#hudDetail{font-size:14px;color:#c6d2e4}#speedHud{position:absolute;z-index:1140;right:14px;bottom:205px;display:grid;gap:12px;justify-items:center;pointer-events:none}#limitSign{height:88px;width:88px;border:10px solid #d6002e;border-radius:50%;background:white;color:#151515;display:grid;place-items:center;font-size:41px;font-weight:800}#actualSpeed{background:#101923ed;color:white;border-radius:17px;min-width:100px;text-align:center;padding:7px 12px}#actualSpeed b{font-size:56px;display:block;line-height:1.15}#actualSpeed small{font-size:20px}#etaHud{position:absolute;z-index:1140;bottom:12px;left:12px;right:12px;background:#0c1524f2;border-radius:16px;display:none;grid-template-columns:1fr 1fr 1fr;align-items:center;text-align:center;padding:12px 3px;box-shadow:0 4px 12px #0008}#etaHud span{font-size:24px;font-weight:700;border-right:1px solid #ffffff30}#etaHud span:last-child{border:0}body.hud-guiding #navHud{display:flex}body.hud-guiding #etaHud{display:grid}body.hud-guiding #topSearch{display:none}body.hud-guiding #bottomQuick{display:none}body.hud-guiding .maptools{bottom:110px}body.hud-guiding #speedHud{bottom:180px}#navBanner{display:none!important}.night .leaflet-container{background:#141625}#railWarning{position:absolute;z-index:1150;bottom:95px;left:10px;background:#141b28;color:#fff;border-radius:10px;padding:10px}
+@media(max-width:390px){#hudArrow{font-size:49px}#hudDistance{font-size:28px}#hudRoad{font-size:16px}#navHud{padding:13px;gap:12px}#limitSign{height:68px;width:68px;border-width:7px;font-size:32px}#actualSpeed{min-width:80px}#actualSpeed b{font-size:43px}#etaHud span{font-size:19px}}
+</style></head>
+<body>
+<header><span>🚛 NAVITRAS <small>1.7 TEST</small></span><button id="menuToggle" aria-label="Otwórz menu">☰</button></header>
+<div id="mapWrap"><div id="map" aria-label="Mapa"></div>
+<div id="topSearch"><span>🔎</span><input id="quickAddress" placeholder="Wpisz adres lub nazwę miejsca…" autocomplete="off"><button id="quickFind">Szukaj</button></div>
+<div id="topSuggestions"></div>
+<div id="routeChoices"><button id="toggleChoices" aria-label="Rozwiń lub zwiń warianty trasy">⌃ Trasy do celu</button><div id="routeChoiceButtons"></div><div class="rowActions"><button class="lead" id="leadRoute">▶ PROWADŹ</button><button class="edit" id="editRoute">✎ EDYTUJ</button><button class="edit" id="deleteRouteMap" style="background:#a52e36">✕ USUŃ</button><button class="edit" id="stopGuidance" style="display:none">■ Zatrzymaj</button></div><div class="details" id="routeChoiceInfo"></div></div><div id="editBanner" style="display:none"><b>✎ Edycja trasy</b><small>Przytrzymaj mapę, aby dodać punkt pośredni. Przeciągnij pinezkę, aby ją przesunąć.</small><button id="cancelEdit">✕</button></div><div id="editBar" style="display:none"><button id="cancelEditBottom">← Anuluj</button><button id="recalcMap">↻ Przelicz trasę</button><button id="saveEdit">✓ Zapisz trasę</button></div><div id="pinActions"><p>📍 Wybrany punkt na mapie</p><button id="pinGoal">Jedź tutaj</button><button id="pinStop">Dodaj punkt</button><button id="pinSave">☆ Zapisz</button><button id="pinCancel" class="secondary">Zamknij</button></div>
+<div id="navHud" aria-live="polite"><div id="hudArrow">↱</div><div><b id="hudDistance">—</b><div id="hudRoad">Następny manewr</div><small id="hudDetail">Włącz prowadzenie GPS</small></div></div><div id="speedHud"><div id="limitSign">?</div><div id="actualSpeed"><b id="speedValue">0</b><small>km/h</small></div></div><div id="etaHud"><span id="etaTime">--:--</span><span id="etaKm">— km</span><span id="etaMins">— min</span></div><div id="railWarning" hidden></div><div id="bottomQuick"><button id="quickRoute">🧭 Trasa</button><button id="quickSaved">☆ Zapisane</button><button id="vehicleQuick">🚗 Auto</button></div>
+<div id="bottomBar"><span>Prędkość<br><strong id="liveSpeed">0</strong> km/h</span><span>Limit<br><strong class="speedUnknown">?</strong></span><span>Trasa<br><strong id="liveDistance">—</strong></span><span>GPS<br><strong id="liveGps">○</strong></span></div><div id="navBanner"></div><div class="maptools">
+<button id="zoomIn" aria-label="Przybliż">+</button>
+<button id="zoomOut" aria-label="Oddal">−</button>
+<button id="center" aria-label="Wyśrodkuj" title="Wyśrodkuj">⌖</button>
+<button id="follow" class="follow" aria-label="Śledzenie pozycji" title="Włącz lub wyłącz śledzenie">◎</button>
+</div></div>
+<div id="menuDrawer" aria-label="Menu NAVITRAS"></div><section class="panel">
+<button id="closePanel" class="secondary">← Wróć do mapy</button><button id="locate">📍 Uruchom GPS i śledzenie</button>
+<div class="hint">Przesunięcie mapy palcem wstrzymuje centrowanie. ⌖ przywraca śledzenie. GPS działa także bez aktywnej trasy.</div>
+<div class="card">
+<h2>⭐ Moje miejsca</h2>
+<div class="quickgrid"><button class="secondary" id="goHome">🏠 Dom</button><button class="secondary" id="showBases">🏭 Bazy / praca</button><button class="secondary" id="showFavorites">⭐ Ulubione</button><button class="secondary" id="showRecent">🕘 Ostatnie cele</button></div>
+<div class="small">Wybierz cel, aby ustawić go w planowaniu trasy. Przytrzymaj palec na mapie, aby zapisać lokalizację.</div>
+<div id="savedPlaces"></div>
+<div class="line"><button class="outline" id="saveDestination">☆ Zapisz wybrany cel</button><button class="outline" id="exportPlaces">Eksport miejsc</button></div>
+</div>
+<div class="card">
+<h2>🗺️ Planowanie trasy</h2>
+<label>Rodzaj pojazdu
+<select id="vehicleType"><option value="car" selected>🚗 Samochód osobowy – trasa testowa</option><option value="truck">🚛 Ciężarówka – trasowanie jeszcze niedostępne</option></select></label>
+<label>Punkt początkowy (A)
+<select id="startMode"><option value="gps">Moja lokalizacja GPS</option><option value="address">Wpisany adres lub punkt na mapie</option></select></label>
+<div id="startRow" hidden><div class="line"><input id="startInput" placeholder="Adres początkowy" autocomplete="off"><button class="secondary" data-search="start">Szukaj</button></div><div id="startChosen" class="small"></div></div>
+<div id="gpsNote" class="small">Początek: bieżąca lokalizacja GPS.</div>
+<div id="stops"><label>Punkty pośrednie (opcjonalnie)</label><div id="stopList"></div></div>
+<button class="outline" id="addStop">＋ Dodaj punkt pośredni</button>
+<label>Cel podróży (B)</label>
+<div class="line"><input id="endInput" placeholder="Wpisz adres docelowy" autocomplete="off"><button class="secondary" data-search="end">Szukaj</button></div>
+<div id="endChosen" class="small"></div>
+<div id="suggestions" aria-live="polite"></div><div id="searchResults" aria-live="polite"></div>
+<div class="line"><button class="secondary" id="swap">⇄ Zamień A i B</button><button class="secondary" id="clearRoute">Wyczyść trasę</button></div>
+<button id="calculate">🧭 Wyznacz trasę</button>
+<label class="line" style="justify-content:flex-start"><input id="autoZoom" type="checkbox" checked style="width:20px;height:20px;flex:none"> Automatyczny, płynny zoom przed manewrem</label>
+<button id="startPreview" class="secondary" disabled>▶ Rozpocznij test prowadzenia GPS</button>
+<label class="line" style="justify-content:flex-start"><input id="voice" type="checkbox" style="width:20px;height:20px;flex:none"> Komunikaty głosowe (eksperymentalne)</label>
+<div id="maneuverInfo" class="small">Prowadzenie testowe dostępne po wyznaczeniu trasy od GPS.</div>
+<div id="routeInfo" role="status">Wybierz adresy i naciśnij „Wyznacz trasę”.</div>
+<div class="small">Możesz też dotknąć mapy, aby ustawić cel B. Wyszukiwanie obejmuje Europę; wymaga internetu. Podpowiedzi są eksperymentalne i zależą od zewnętrznej usługi.</div>
+</div>
+<div class="card"><h2>🎨 Wygląd i komunikaty</h2><label>Motyw mapy<select id="mapTheme"><option value="auto">Automatyczny dzień / noc</option><option value="day">Dzienny</option><option value="night">Nocny</option></select></label><label>Kolor głównej trasy<input id="routeColor" type="color" value="#3189ff"></label><label>Język komunikatów<select id="navLanguage"><option value="pl-PL">Polski</option><option value="nl-BE">Nederlands (België)</option><option value="en-GB">English</option><option value="fr-FR">Français</option><option value="de-DE">Deutsch</option></select></label><label class="line"><input type="checkbox" id="cameraAlerts" checked style="width:20px"> Ostrzeżenia o radarach (tylko gdy dane są dostępne)</label><label class="line"><input type="checkbox" id="railAlerts" checked style="width:20px"> Ostrzeżenia o przejazdach kolejowych (tylko gdy dane są dostępne)</label><p class="small">Brak podłączonego wiarygodnego źródła radarów, ograniczeń prędkości i przejazdów. Aplikacja nie wyświetla zmyślonych ostrzeżeń.</p></div><div class="card"><h2 id="truckHeading">🚛 Profil ciężarówki (zapis lokalny)</h2>
+<div class="fields">
+<label>Wysokość (m)<input id="height" type="number" step="0.01" min="0" value="4.00"></label>
+<label>Szerokość (m)<input id="width" type="number" step="0.01" min="0" value="2.55"></label>
+<label>Długość (m)<input id="length" type="number" step="0.1" min="0" value="16.5"></label>
+<label>Masa (t)<input id="weight" type="number" step="0.1" min="0" value="40"></label>
+</div><button class="secondary" id="save">Zapisz profil ciężarówki</button></div>
+<div id="status" role="status">Włącz GPS, aby śledzić pozycję.</div>
+<div class="warning">⚠️ WERSJA TESTOWA. Trasy wyznaczane są dla samochodów osobowych przez publiczny serwer demonstracyjny OSRM. Nie uwzględniają ograniczeń ciężarowych, ADR, bieżących zamknięć ani ruchu. Nie używaj aplikacji do prowadzenia pojazdu. Prowadzenie, głos, automatyczny zoom i przeliczanie trasy są eksperymentalne i wymagają aktywnego ekranu oraz internetu. Nie ma niezawodnego działania w tle, aktualnych zamknięć ani weryfikacji manewrów. Do jazdy używaj sprawdzonej nawigacji.</div>
+</section>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+"use strict";
+const $=id=>document.getElementById(id);
+const map=L.map('map',{zoomControl:false}).setView([51.033,2.864],10);
+const dayTiles=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap contributors',maxZoom:19});const nightTiles=L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{attribution:'© OpenStreetMap, © CARTO',maxZoom:19});let tileMode='auto';function updateTiles(){const night=tileMode==='night'||(tileMode==='auto'&&(new Date().getHours()<7||new Date().getHours()>=19));if(map.hasLayer(dayTiles))map.removeLayer(dayTiles);if(map.hasLayer(nightTiles))map.removeLayer(nightTiles);(night?nightTiles:dayTiles).addTo(map);document.body.classList.toggle('night',night)}updateTiles();
+let watchId=null,lastPosition=null,vehicle=null,accuracyCircle=null,follow=true,destination=null,routeLayer=null,routeMarkers=[];
+let startPoint=null,endPoint=null,stopCounter=0,stops=[],activeSearch=null;
+let routeCoords=[],routeProgress=[],routeManeuvers=[],previewOn=false,lastAutoZoom=0,manualZoomUntil=0;
+let routeAlternatives=[],selectedRouteIndex=0,alternativeLayers=[],routePlanningPoints=[];
+let lastReroute=0,rerouteBusy=false,lastAnnounced="",lastAlong=0,offRouteCount=0,navDestination=null;
+const status=$('status'),routeInfo=$('routeInfo');
+function setFollow(v){follow=v;const b=$('follow');b.classList.toggle('follow',v);b.title=v?'Śledzenie włączone':'Śledzenie wyłączone';b.setAttribute('aria-pressed',String(v))}
+function moveTo(ll,zoom){map.setView(ll,zoom===undefined?map.getZoom():zoom,{animate:true})}
+map.on('dragstart',()=>setFollow(false));
+
+$('zoomIn').onclick=()=>{manualZoomUntil=Date.now()+20000;map.zoomIn()};$('zoomOut').onclick=()=>{manualZoomUntil=Date.now()+20000;map.zoomOut()};
+$('center').onclick=()=>{manualZoomUntil=0;setFollow(true);if(lastPosition)moveTo(lastPosition,Math.max(map.getZoom(),15));else startGPS()};
+$('follow').onclick=()=>{setFollow(!follow);if(follow){if(lastPosition)moveTo(lastPosition);else startGPS()}};
+function onPosition(p){const ll=[p.coords.latitude,p.coords.longitude];lastPosition=ll;const heading=Number.isFinite(p.coords.heading)?p.coords.heading:0;const html='<div class="vehicle" style="--heading:'+heading+'deg"></div>';
+if(!vehicle){vehicle=L.marker(ll,{icon:L.divIcon({html,className:'',iconSize:[24,24],iconAnchor:[12,12]})}).addTo(map).bindPopup('Twoja pozycja')}
+else{vehicle.setLatLng(ll);vehicle.setIcon(L.divIcon({html,className:'',iconSize:[24,24],iconAnchor:[12,12]}))}
+if(!accuracyCircle){accuracyCircle=L.circle(ll,{radius:p.coords.accuracy,color:'#1477ed',weight:1,fillOpacity:.08,interactive:false}).addTo(map)}
+else{accuracyCircle.setLatLng(ll);accuracyCircle.setRadius(p.coords.accuracy)}
+const kph=Number.isFinite(p.coords.speed)?Math.max(0,Math.round(p.coords.speed*3.6)):null;$('speedValue').textContent=kph===null?'—':kph;$('liveSpeed').textContent=kph===null?'—':kph; if(previewOn && follow)updateManeuverZoom(p);
+else if(follow)moveTo(ll,Math.max(map.getZoom(),15));
+status.textContent='GPS aktywny · dokładność około '+Math.round(p.coords.accuracy)+' m · śledzenie '+(follow?'włączone':'wstrzymane')+'.'}
+function updateManeuverZoom(p){
+const here=[p.coords.latitude,p.coords.longitude];
+if(!routeCoords.length){moveTo(here);return}
+let nearest=0,offRoute=Infinity;
+for(let i=0;i<routeCoords.length;i++){const d=map.distance(here,routeCoords[i]);if(d<offRoute){offRoute=d;nearest=i}}
+if(offRoute>Math.max(100,(p.coords.accuracy||0)*2)){offRouteCount++;$('maneuverInfo').textContent='Poza trasą – sprawdzam możliwość przeliczenia…';moveTo(here);if(offRouteCount>=3 && Date.now()-lastReroute>45000)rerouteFromGPS();return}else offRouteCount=0;
+const along=routeProgress[nearest];lastAlong=along;const next=routeManeuvers.find(m=>m.distance>along+12);
+const speed=Number.isFinite(p.coords.speed)&&p.coords.speed>=0?p.coords.speed:0;
+const trigger=Math.max(130,Math.min(850,speed*22+130));
+let targetZoom=15;
+if(next){const remaining=Math.max(0,next.distance-along);const names={left:'w lewo',right:'w prawo',straight:'prosto','slight left':'lekko w lewo','slight right':'lekko w prawo',uturn:'zawróć'};
+$('maneuverInfo').textContent='Następny manewr: '+(names[next.modifier]||next.type)+' za około '+Math.round(remaining/10)*10+' m'+(next.road?' · '+next.road:'')+'.';$('navBanner').replaceChildren();$('navBanner').append(document.createTextNode((names[next.modifier]||next.type)+' · '+Math.round(remaining/10)*10+' m'));const sub=document.createElement('small');sub.textContent=next.road||'Następny manewr';$('navBanner').append(sub);
+$('hudDistance').textContent=remaining>=1000?(remaining/1000).toFixed(1).replace('.',',')+' km':Math.round(remaining/10)*10+' m';$('hudRoad').textContent=next.road||'Następny manewr';$('hudDetail').textContent=names[next.modifier]||next.type;$('hudArrow').textContent=next.modifier?.includes('left')?'↰':next.modifier?.includes('right')?'↱':next.modifier==='uturn'?'↶':'↑';if(remaining<trigger){targetZoom=remaining<70?18:remaining<200?17:16}
+const announceAt=Math.max(75,Math.min(500,speed*14+75));if(remaining<announceAt && remaining>20){const key=next.index+':approach';if(lastAnnounced!==key){lastAnnounced=key;speak('Za około '+Math.round(remaining/50)*50+' metrów '+(names[next.modifier]||'wykonaj manewr'))}}}
+else { $('maneuverInfo').textContent='Zbliżasz się do celu lub końca zaplanowanej trasy.'; if(routeProgress.length && routeProgress.at(-1)-along<35){previewOn=false;$('navBanner').style.display='none';$('startPreview').textContent='▶ Rozpocznij test prowadzenia GPS';speak('Dotarłeś do celu.');}}
+if(!$('autoZoom').checked||Date.now()<manualZoomUntil)targetZoom=map.getZoom();
+if(Date.now()-lastAutoZoom>1200 && Math.abs(map.getZoom()-targetZoom)>=.8){lastAutoZoom=Date.now();map.flyTo(here,targetZoom,{animate:true,duration:1.0})}
+else map.panTo(here,{animate:true,duration:.5});
+}
+function speak(message){if(!$('voice').checked||!('speechSynthesis' in window))return;try{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(message);u.lang='pl-PL';u.rate=1;speechSynthesis.speak(u)}catch(e){}}
+async function rerouteFromGPS(){
+if(rerouteBusy||!lastPosition||!navDestination||!previewOn)return;
+lastReroute=Date.now();rerouteBusy=true;speak('Zmiana trasy, przeliczam');
+try{
+const pending=stops.map(s=>s.point).filter(Boolean);
+const coords=[{lat:lastPosition[0],lon:lastPosition[1]},...pending,navDestination].map(p=>p.lon+','+p.lat).join(';');
+const response=await fetch('https://router.project-osrm.org/route/v1/driving/'+coords+'?overview=full&geometries=geojson&steps=true');
+if(!response.ok)throw Error('HTTP '+response.status);
+const data=await response.json();if(data.code!=='Ok'||!data.routes?.length)throw Error('Brak trasy');
+installRoute(data.routes[0]);setFollow(true);lastAnnounced='';offRouteCount=0;
+$('maneuverInfo').textContent='Przeliczono trasę (wersja testowa).';speak('Przeliczono trasę.');
+}catch(e){$('maneuverInfo').textContent='Nie udało się przeliczyć trasy: '+e.message}
+finally{rerouteBusy=false}
+}
+function installRoute(route){
+if(routeLayer)map.removeLayer(routeLayer);
+routeCoords=route.geometry.coordinates.map(c=>[c[1],c[0]]);
+routeProgress=[0];for(let i=1;i<routeCoords.length;i++)routeProgress.push(routeProgress[i-1]+map.distance(routeCoords[i-1],routeCoords[i]));
+routeManeuvers=(route.legs||[]).flatMap(leg=>(leg.steps||[]).filter(step=>step.maneuver&&!['depart','arrive'].includes(step.maneuver.type)).map(step=>{
+const c=step.maneuver.location;let best=0,d=Infinity;
+for(let i=0;i<routeCoords.length;i++){const t=map.distance(routeCoords[i],[c[1],c[0]]);if(t<d){d=t;best=i}}
+return {index:best,distance:routeProgress[best],type:step.maneuver.type,modifier:step.maneuver.modifier||'',road:step.name||''};})).sort((a,b)=>a.distance-b.distance);
+routeLayer=L.geoJSON(route.geometry,{style:{color:'#1477ed',weight:6,opacity:.9}}).addTo(map);
+}
+function onError(e){status.textContent='Problem z GPS: '+e.message+'. Sprawdź uprawnienia lokalizacji.'}
+function startGPS(){if(!navigator.geolocation){status.textContent='Ta przeglądarka nie obsługuje GPS.';return}setFollow(true);if(watchId!==null){if(lastPosition)moveTo(lastPosition,Math.max(map.getZoom(),15));return}status.textContent='Uruchamiam GPS…';watchId=navigator.geolocation.watchPosition(onPosition,onError,{enableHighAccuracy:true,maximumAge:1000,timeout:20000})}
+$('locate').onclick=startGPS;
+const keys=['height','width','length','weight'];
+try{const v=JSON.parse(localStorage.getItem('trucknav-profile')||'{}');keys.forEach(k=>{if(v[k]!=null)$(k).value=v[k]})}catch(e){}
+$('save').onclick=()=>{const p={};for(const k of keys){const n=Number($(k).value);if(!Number.isFinite(n)||n<=0){status.textContent='Wprowadź poprawną dodatnią wartość: '+k;return}p[k]=n}try{localStorage.setItem('trucknav-profile',JSON.stringify(p));status.textContent='Profil zapisany. Parametry nie wpływają jeszcze na trasowanie.'}catch(e){status.textContent='Nie udało się zapisać profilu: '+e.message}};
+$('autoZoom').onchange=()=>{try{localStorage.setItem('trucknav-autozoom',String($('autoZoom').checked))}catch(e){}};try{const z=localStorage.getItem('trucknav-autozoom');if(z!==null)$('autoZoom').checked=z==='true'}catch(e){}
+$('startMode').onchange=()=>{const custom=$('startMode').value==='address';$('startRow').hidden=!custom;$('gpsNote').hidden=custom};
+function updateChosen(id,p){$(id).textContent=p?'Wybrano: '+p.name:''}
+function makeStop(){
+const s={id:++stopCounter,point:null};stops.push(s);renderStops();
+}
+function renderStops(){
+const host=$('stopList');host.replaceChildren();
+stops.forEach((s,i)=>{
+const wrap=document.createElement('div');wrap.className='stop';
+const input=document.createElement('input');input.placeholder='Punkt '+(i+1)+' – adres';input.value=s.point?.name||s.text||'';input.setAttribute('aria-label','Adres punktu pośredniego '+(i+1));
+input.oninput=()=>{s.point=null;s.text=input.value;queueSuggest(input.value,'stop',s.id)};input.onfocus=()=>{if(input.value.length>=3)queueSuggest(input.value,'stop',s.id)};
+const search=document.createElement('button');search.className='secondary';search.textContent='Szukaj';search.onclick=()=>searchAddress('stop',s.id,input.value);
+const up=document.createElement('button');up.className='outline';up.textContent='↑';up.title='Przesuń wyżej';up.disabled=i===0;up.onclick=()=>{[stops[i-1],stops[i]]=[stops[i],stops[i-1]];renderStops()};
+const down=document.createElement('button');down.className='outline';down.textContent='↓';down.title='Przesuń niżej';down.disabled=i===stops.length-1;down.onclick=()=>{[stops[i+1],stops[i]]=[stops[i],stops[i+1]];renderStops()};
+const del=document.createElement('button');del.className='outline';del.textContent='×';del.title='Usuń punkt';del.onclick=()=>{stops=stops.filter(t=>t!==s);renderStops()};
+wrap.append(input,search,up,down,del);host.append(wrap);
+});
+}
+$('addStop').onclick=makeStop;
+$('startInput').oninput=()=>{startPoint=null;updateChosen('startChosen',null);queueSuggest($('startInput').value,'start',null)};
+$('endInput').oninput=()=>{endPoint=null;updateChosen('endChosen',null);queueSuggest($('endInput').value,'end',null)};
+document.querySelectorAll('[data-search]').forEach(b=>b.onclick=()=>searchAddress(b.dataset.search,null,$(b.dataset.search==='start'?'startInput':'endInput').value));
+async function searchAddress(type,id,raw){
+const q=raw.trim();if(q.length<3){routeInfo.textContent='Wpisz przynajmniej 3 znaki adresu.';return}
+const results=$('searchResults');results.replaceChildren();results.textContent='Szukam adresu…';
+const request={type,id};activeSearch=request;
+try{
+const url='https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=6&q='+encodeURIComponent(q);
+const r=await fetch(url,{headers:{'Accept':'application/json'}});if(!r.ok)throw new Error('HTTP '+r.status);
+const data=await r.json();if(activeSearch!==request)return;results.replaceChildren();
+const european=x=>{const a=x.address||{};return !a.country_code||['al','ad','at','be','ba','bg','hr','cy','cz','dk','ee','fi','fr','de','gr','hu','is','ie','it','xk','lv','li','lt','lu','mt','md','mc','me','nl','mk','no','pl','pt','ro','sm','rs','sk','si','es','se','ch','tr','ua','gb','va'].includes(a.country_code)};
+const matches=data.filter(european);
+if(!matches.length){results.textContent='Nie znaleziono adresu w Europie. Spróbuj dopisać kraj lub kod pocztowy.';return}
+matches.forEach(item=>{
+const b=document.createElement('button');b.className='result';b.textContent=item.display_name;
+b.onclick=()=>{
+const point={lat:Number(item.lat),lon:Number(item.lon),name:item.display_name};
+if(type==='start'){startPoint=point;$('startInput').value=point.name;updateChosen('startChosen',point)}
+else if(type==='end'){endPoint=point;$('endInput').value=point.name;updateChosen('endChosen',point)}
+else{const s=stops.find(s=>s.id===id);if(!s)return;s.point=point;renderStops()}
+results.replaceChildren();$('suggestions').style.display='none';map.setView([point.lat,point.lon],13);routeInfo.textContent='Adres wybrany. Możesz dodać kolejne punkty albo wyznaczyć trasę.';
+};results.append(b);
+});
+}catch(e){if(activeSearch===request)results.textContent='Nie udało się wyszukać adresu: '+e.message+'. Sprawdź internet i spróbuj ponownie.'}
+}
+function clearRouteVisual(){alternativeLayers.forEach(l=>map.removeLayer(l));alternativeLayers=[];routeAlternatives=[];$('routeChoices').style.display='none';$('editBar').style.display='none';$('editBanner').style.display='none';document.body.classList.remove('guiding','editing');$('stopGuidance').style.display='none';$('leadRoute').style.display='inline-block';$('navBanner').style.display='none';previewOn=false;routeCoords=[];routeProgress=[];routeManeuvers=[];$('startPreview').disabled=true;$('startPreview').textContent='▶ Rozpocznij test prowadzenia GPS';$('maneuverInfo').textContent='Prowadzenie nieaktywne.';navDestination=null;lastAnnounced='';if(routeLayer){map.removeLayer(routeLayer);routeLayer=null}routeMarkers.forEach(m=>map.removeLayer(m));routeMarkers=[]}
+$('startPreview').onclick=()=>{if(!routeCoords.length||$('startMode').value!=='gps')return;previewOn=!previewOn;$('navBanner').style.display=previewOn?'block':'none';setFollow(previewOn);lastAnnounced='';$('startPreview').textContent=previewOn?'■ Zatrzymaj test prowadzenia':'▶ Rozpocznij test prowadzenia GPS';$('maneuverInfo').textContent=previewOn?'Test prowadzenia włączony. Ekran powinien pozostać aktywny.':'Test prowadzenia zatrzymany.';if(previewOn){startGPS();speak('Rozpoczęto test prowadzenia.')}else if('speechSynthesis' in window)speechSynthesis.cancel()};
+$('clearRoute').onclick=()=>{clearRouteVisual();startPoint=null;endPoint=null;stops=[];renderStops();$('startInput').value='';$('endInput').value='';updateChosen('startChosen',null);updateChosen('endChosen',null);$('searchResults').replaceChildren();if(destination){map.removeLayer(destination);destination=null}routeInfo.textContent='Trasa wyczyszczona.'};
+$('swap').onclick=()=>{
+if($('startMode').value==='gps'){routeInfo.textContent='Aby zamienić A i B, najpierw wybierz „Wpisany adres” jako punkt A.';return}
+[startPoint,endPoint]=[endPoint,startPoint];
+$('startInput').value=startPoint?.name||'';$('endInput').value=endPoint?.name||'';
+updateChosen('startChosen',startPoint);updateChosen('endChosen',endPoint);
+routeInfo.textContent='Zamieniono punkt A i B. Wyznacz trasę ponownie.';
+};
+async function resolveTypedPoint(inputId){
+ const q=$(inputId).value.trim();if(q.length<3)throw new Error('Wpisz adres (minimum 3 znaki).');
+ const r=await fetch('https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q='+encodeURIComponent(q),{headers:{Accept:'application/json'}});
+ if(!r.ok)throw new Error('Wyszukiwanie adresu: HTTP '+r.status);
+ const a=await r.json();if(!a.length)throw new Error('Nie znaleziono adresu: '+q);
+ return {lat:+a[0].lat,lon:+a[0].lon,name:a[0].display_name};
+}
+async function awaitGps(){if(lastPosition)return lastPosition;if(!navigator.geolocation)throw new Error('Brak GPS');
+ status.textContent='Ustalam pozycję GPS…';return new Promise((resolve,reject)=>navigator.geolocation.getCurrentPosition(p=>{onPosition(p);resolve(lastPosition)},()=>reject(new Error('Nie udało się uzyskać pozycji GPS. Sprawdź uprawnienia i spróbuj ponownie.')),{enableHighAccuracy:true,timeout:18000,maximumAge:10000}));}
+$('calculate').onclick=async()=>{
+ const btn=$('calculate');if(btn.disabled)return;btn.disabled=true;
+ try{
+ if($('startMode').value==='gps')await awaitGps();
+ else if(!startPoint){startPoint=await resolveTypedPoint('startInput');updateChosen('startChosen',startPoint)}
+ if(!endPoint){endPoint=await resolveTypedPoint('endInput');updateChosen('endChosen',endPoint)}
+ for(const stop of stops){if(!stop.point){const q=stop.text||'';if(!q.trim())throw new Error('Uzupełnij punkt pośredni');const r=await fetch('https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q='+encodeURIComponent(q));const a=await r.json();if(!a.length)throw new Error('Nie znaleziono punktu: '+q);stop.point={lat:+a[0].lat,lon:+a[0].lon,name:a[0].display_name}}}
+ }catch(e){routeInfo.textContent=e.message;btn.disabled=false;return}
+ btn.disabled=false;
+if($('vehicleType').value==='truck'){routeInfo.textContent='Tryb ciężarowy nie ma jeszcze bezpiecznego silnika trasowania. Przełącz na samochód osobowy, aby zobaczyć trasę testową.';return}
+let first;
+if($('startMode').value==='gps'){
+if(!lastPosition){routeInfo.textContent='Najpierw uruchom GPS i poczekaj na ustalenie pozycji.';startGPS();return}
+first={lat:lastPosition[0],lon:lastPosition[1],name:'Moja lokalizacja'};
+}else{first=startPoint;if(!first){routeInfo.textContent='Wyszukaj i wybierz adres punktu A z wyników.';return}}
+if(!endPoint){routeInfo.textContent='Wyszukaj i wybierz adres celu B albo wskaż go na mapie.';return}
+if(stops.some(s=>!s.point)){routeInfo.textContent='Wyszukaj i wybierz wszystkie dodane punkty pośrednie albo usuń puste.';return}
+const points=[first,...stops.map(s=>s.point),endPoint];
+btn.disabled=true;routeInfo.textContent='Wyznaczam trasę testową…';
+try{
+const coords=points.map(p=>p.lon+','+p.lat).join(';');
+const url='https://router.project-osrm.org/route/v1/driving/'+coords+'?overview=full&geometries=geojson&steps=true&alternatives=true';
+const response=await fetch(url);if(!response.ok)throw new Error('Serwer tras: HTTP '+response.status);
+const data=await response.json();if(data.code!=='Ok'||!data.routes?.length)throw new Error('Brak dostępnej trasy');
+clearRouteVisual();
+routeAlternatives=data.routes;selectedRouteIndex=0;routePlanningPoints=points;
+const route=data.routes[0];
+installRoute(route);navDestination=endPoint;lastAnnounced='';recordRecent(endPoint);
+$('startPreview').disabled=$('startMode').value!=='gps';
+$('maneuverInfo').textContent=$('startMode').value==='gps'?'Naciśnij „Rozpocznij test prowadzenia GPS”.':'Trasa A–B: prowadzenie GPS wymaga trasy od aktualnej lokalizacji.';
+points.forEach((p,i)=>routeMarkers.push(L.marker([p.lat,p.lon]).addTo(map).bindPopup((i===0?'A: ':i===points.length-1?'B: ':'Przystanek '+i+': ')+p.name)));
+map.fitBounds(routeLayer.getBounds(),{padding:[35,35]});setFollow(false);
+showRouteAlternatives();
+const km=(route.distance/1000).toLocaleString('pl-PL',{maximumFractionDigits:1});
+const mins=Math.round(route.duration/60);routeInfo.textContent='Trasa testowa: '+km+' km · około '+Math.floor(mins/60)+' godz. '+(mins%60)+' min (bez aktualnych korków). Nie jest to nawigacja zakręt po zakręcie.';
+$('liveDistance').textContent=km+' km';closeOverlays();setTimeout(()=>{map.invalidateSize();map.fitBounds(routeLayer.getBounds(),{padding:[55,55]})},220);
+}catch(e){routeInfo.textContent='Nie udało się wyznaczyć trasy: '+e.message+'. Publiczny serwer może być chwilowo niedostępny.'}
+finally{btn.disabled=false}
+};
+
+/* Dane lokalne – bez przesyłania zapisanych miejsc do serwera aplikacji. */
+const storeKey='navitras-places-v1';
+let places={home:null,bases:[],favorites:[],recent:[]};
+try{const saved=JSON.parse(localStorage.getItem(storeKey)||'null');if(saved&&typeof saved==='object')places={...places,...saved}}catch(e){}
+function persistPlaces(){try{localStorage.setItem(storeKey,JSON.stringify(places))}catch(e){routeInfo.textContent='Nie można zapisać miejsc w pamięci telefonu.'}}
+function validPoint(p){return p&&Number.isFinite(p.lat)&&Number.isFinite(p.lon)&&Math.abs(p.lat)<=90&&Math.abs(p.lon)<=180}
+function setGoal(p){if(!validPoint(p))return;endPoint={...p};$('endInput').value=p.name;$('endChosen').textContent='Wybrano: '+p.name;$('searchResults').replaceChildren();$('suggestions').style.display='none';map.setView([p.lat,p.lon],13);routeInfo.textContent='Wybrano cel: '+p.name+'. Naciśnij „Wyznacz trasę”.';window.scrollTo({top:0,behavior:'smooth'})}
+function recordRecent(p){if(!validPoint(p))return;places.recent=[{...p},...places.recent.filter(x=>x.lat!==p.lat||x.lon!==p.lon)].slice(0,20);persistPlaces()}
+function savePoint(p,category){if(!validPoint(p))return;const name=prompt('Nazwa miejsca:',p.name||'Zapisane miejsce');if(name===null||!name.trim())return;const value={lat:p.lat,lon:p.lon,name:name.trim()};if(category==='home')places.home=value;else{const list=category==='bases'?places.bases:places.favorites;list.push(value)}persistPlaces();showPlaces(category)}
+function showPlaces(category){const box=$('savedPlaces');box.replaceChildren();const title=document.createElement('div');title.className='small';title.textContent=category==='home'?'Dom':category==='bases'?'Bazy i miejsca pracy':category==='recent'?'Ostatnie cele':'Ulubione';box.append(title);
+const items=category==='home'?(places.home?[places.home]:[]):places[category]||[];
+if(!items.length){const empty=document.createElement('div');empty.className='small';empty.textContent='Brak zapisanych miejsc.';box.append(empty)}
+items.forEach((p,i)=>{const row=document.createElement('div');row.className='saveditem';const name=document.createElement('span');name.className='savedname';name.textContent=p.name;const go=document.createElement('button');go.textContent='Jedź';go.onclick=()=>setGoal(p);const edit=document.createElement('button');edit.className='secondary';edit.textContent='Edytuj';edit.onclick=()=>{const n=prompt('Nowa nazwa:',p.name);if(n&&n.trim()){p.name=n.trim();persistPlaces();showPlaces(category)}};const del=document.createElement('button');del.className='outline';del.textContent='Usuń';del.onclick=()=>{if(!confirm('Usunąć to miejsce?'))return;if(category==='home')places.home=null;else places[category].splice(i,1);persistPlaces();showPlaces(category)};row.append(name,go,edit,del);box.append(row)});
+if(category==='home'||category==='bases'||category==='favorites'){const add=document.createElement('button');add.className='outline';add.textContent='＋ Zapisz aktualnie wybrany cel jako '+(category==='home'?'dom':category==='bases'?'bazę':'ulubione');add.onclick=()=>{if(!endPoint){routeInfo.textContent='Najpierw wybierz cel na mapie lub wyszukaj adres.';return}savePoint(endPoint,category)};box.append(add)}
+}
+$('goHome').onclick=()=>{if(places.home)setGoal(places.home);else showPlaces('home')};
+$('showBases').onclick=()=>showPlaces('bases');$('showFavorites').onclick=()=>showPlaces('favorites');$('showRecent').onclick=()=>showPlaces('recent');
+$('saveDestination').onclick=()=>{if(!endPoint){routeInfo.textContent='Najpierw wybierz cel.';return}savePoint(endPoint,'favorites')};
+$('exportPlaces').onclick=()=>{const blob=new Blob([JSON.stringify(places,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='navitras-moje-miejsca.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),3000)};
+
+/* Podpowiedzi – Photon/OSM: usługa publiczna, limitowana, nie do gwarantowanego zastosowania komercyjnego. */
+let suggestTimer=null,suggestAbort=null,suggestSeq=0;
+function queueSuggest(raw,type,id){clearTimeout(suggestTimer);const host=$('suggestions');host.replaceChildren();host.style.display='none';if(suggestAbort)suggestAbort.abort();const q=raw.trim();const seq=++suggestSeq;if(q.length<3)return;
+suggestTimer=setTimeout(async()=>{suggestAbort=new AbortController();try{
+const params=new URLSearchParams({q,limit:'6',lang:'pl'});if(lastPosition){params.set('lat',String(lastPosition[0]));params.set('lon',String(lastPosition[1]))}
+const response=await fetch('https://photon.komoot.io/api/?'+params,{signal:suggestAbort.signal});if(!response.ok)throw Error('HTTP '+response.status);const data=await response.json();if(seq!==suggestSeq)return;
+const countries=new Set(['AL','AD','AT','BE','BA','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IS','IE','IT','XK','LV','LI','LT','LU','MT','MD','MC','ME','NL','MK','NO','PL','PT','RO','SM','RS','SK','SI','ES','SE','CH','TR','UA','GB','VA']);
+const items=(data.features||[]).filter(f=>countries.has((f.properties?.countrycode||'').toUpperCase())&&Array.isArray(f.geometry?.coordinates));
+if(!items.length)return;host.replaceChildren();for(const f of items){const p=f.properties;const parts=[p.name,p.housenumber,p.street,p.postcode,p.city||p.locality,p.state,p.country].filter(Boolean);const name=[...new Set(parts)].join(', ');const point={name,lat:f.geometry.coordinates[1],lon:f.geometry.coordinates[0]};const b=document.createElement('button');const main=document.createElement('span');main.textContent=p.name||p.street||'Adres';const sub=document.createElement('span');sub.className='sub';sub.textContent=[p.postcode,p.city||p.locality,p.country].filter(Boolean).join(', ');b.append(main,sub);b.onclick=()=>{if(type==='start'){startPoint=point;$('startInput').value=name;updateChosen('startChosen',point)}else if(type==='end'){endPoint=point;$('endInput').value=name;updateChosen('endChosen',point)}else{const s=stops.find(s=>s.id===id);if(!s)return;s.point=point;renderStops()}host.replaceChildren();host.style.display='none';map.setView([point.lat,point.lon],13);routeInfo.textContent='Wybrano: '+name};host.append(b)}host.style.display='block';
+}catch(e){if(e.name!=='AbortError'&&seq===suggestSeq){host.textContent='Podpowiedzi chwilowo niedostępne. Użyj przycisku Szukaj.';host.style.display='block'}}},450)}
+showPlaces('favorites');
+
+/* NAVITRAS 1.1 – nakładka pełnoekranowa, menu, długie przytrzymanie */
+const openPanel=()=>{document.body.classList.remove('menu-open');document.body.classList.add('panel-open');setTimeout(()=>map.invalidateSize(),150)};
+const closeOverlays=()=>{document.body.classList.remove('panel-open','menu-open');setTimeout(()=>map.invalidateSize(),150)};
+$('closePanel').onclick=closeOverlays;
+$('menuToggle').onclick=()=>{document.body.classList.remove('panel-open');document.body.classList.toggle('menu-open');drawMenu('main')};
+$('quickRoute').onclick=openPanel;
+$('quickSaved').onclick=()=>{openPanel();showPlaces('favorites');$('savedPlaces').scrollIntoView({block:'center'})};
+$('vehicleQuick').onclick=()=>{const s=$('vehicleType');s.value=s.value==='truck'?'car':'truck';$('vehicleQuick').textContent=s.value==='truck'?'🚛 TIR':'🚗 Auto'};
+$('vehicleType').addEventListener('change',()=>{$('vehicleQuick').textContent=$('vehicleType').value==='truck'?'🚛 TIR':'🚗 Auto'});
+const menuStack=[];
+function drawMenu(page){
+ const host=$('menuDrawer');host.replaceChildren();
+ const title=document.createElement('h2');title.textContent=({main:'☰ Menu główne',places:'Moje miejsca',truck:'Profil ciężarowy',settings:'Ustawienia',language:'Język',voice:'Głos nawigacji'})[page]||page;
+ if(page!=='main'){const back=document.createElement('button');back.className='back';back.textContent='← Wstecz';back.onclick=()=>drawMenu(menuStack.pop()||'main');host.append(back)}
+ host.append(title);
+ const add=(name,fn)=>{const b=document.createElement('button');b.textContent=name;b.onclick=fn;host.append(b)};
+ const next=(p)=>{menuStack.push(page);drawMenu(p)};
+ const panelAt=id=>{openPanel();setTimeout(()=>$(id)?.scrollIntoView({block:'start'}),60)};
+ if(page==='main'){
+ add('🔎 Wpisz adres',()=>{closeOverlays();$('quickAddress').focus()});
+ add('🧭 Planuj trasę',()=>panelAt('startMode'));
+ add('🗺️ Zapisane trasy',()=>drawMenu('routes'));
+ add('⭐ Moje miejsca',()=>next('places'));
+ add('🚛 Profil ciężarowy',()=>next('truck'));
+ add('⚙️ Ustawienia',()=>next('settings'));
+ add('📍 Uruchom GPS',()=>{closeOverlays();startGPS()});if(previewOn)add('■ Zatrzymaj prowadzenie',()=>{$('stopGuidance').click();closeOverlays()});
+ }else if(page==='places'){
+ [['🏠 Dom','home'],['🏭 Bazy','bases'],['⭐ Ulubione','favorites'],['🕘 Ostatnie cele','recent']].forEach(([name,cat])=>add(name,()=>{openPanel();showPlaces(cat);setTimeout(()=>$('savedPlaces').scrollIntoView({block:'center'}),60)}));
+ }else if(page==='truck'){
+ add('📐 Wymiary i masa pojazdu',()=>panelAt('truckHeading'));
+ add('🚛 Wybierz tryb ciężarowy',()=>{$('vehicleType').value='truck';$('vehicleQuick').textContent='🚛 TIR';closeOverlays()});
+ add('🚗 Wybierz tryb osobowy',()=>{$('vehicleType').value='car';$('vehicleQuick').textContent='🚗 Auto';closeOverlays()});
+ const note=document.createElement('p');note.className='menuNote';note.textContent='Profil ciężarowy zapisuje parametry, ale nie wyznacza jeszcze bezpiecznych tras ciężarowych.';host.append(note);
+ }else if(page==='settings'){
+ add('🌍 Język',()=>next('language'));
+ add('🔊 Głos nawigacji',()=>next('voice'));
+ add('🔍 Automatyczny zoom',()=>panelAt('autoZoom'));
+ add('🗺️ Planowanie i ustawienia trasy',()=>panelAt('startMode'));
+ }else if(page==='language'){
+ ['Polski','Nederlands','English','Français','Deutsch'].forEach((name,i)=>add(name,()=>{if(i!==0){alert('Tłumaczenie interfejsu na '+name+' nie jest jeszcze dostępne.');return}alert('Aktualny język aplikacji: polski.')}));
+ }else if(page==='voice'){
+ add('🔊 Włącz / wyłącz komunikaty',()=>{$('voice').checked=!$('voice').checked;alert($('voice').checked?'Głos włączony':'Głos wyłączony')});
+ const select=document.createElement('select');select.id='voiceChoice';select.setAttribute('aria-label','Wybierz głos');
+ const fill=()=>{select.replaceChildren();const voices=('speechSynthesis' in window)?speechSynthesis.getVoices():[];const opt=document.createElement('option');opt.value='';opt.textContent='Głos systemowy';select.append(opt);voices.forEach(v=>{const o=document.createElement('option');o.value=v.name;o.textContent=v.name+' ('+v.lang+')';select.append(o)});select.value=localStorage.getItem('navitras-voice')||''};fill();if('speechSynthesis' in window)speechSynthesis.onvoiceschanged=fill;
+ select.onchange=()=>localStorage.setItem('navitras-voice',select.value);host.append(select);
+ }else if(page==='routes'){
+ const saved=JSON.parse(localStorage.getItem('navitras-routes-v1')||'[]');
+ if(!saved.length){const p=document.createElement('p');p.className='menuNote';p.textContent='Nie ma jeszcze zapisanych tras. Wyznacz trasę osobową i wybierz „Zapisz trasę” w planowaniu.';host.append(p)}
+ saved.forEach((r,i)=>add(r.name,()=>{if(!confirm('Przywrócić tę trasę do planowania?'))return;endPoint=r.end;startPoint=r.startMode==='address'?r.start:null;stops=r.stops||[];$('startMode').value=r.startMode;$('startMode').onchange();$('startInput').value=startPoint?.name||'';$('endInput').value=endPoint?.name||'';renderStops();openPanel()}));
+ }
+}
+const quick=$('quickAddress');
+quick.addEventListener('input',()=>{ $('endInput').value=quick.value;endPoint=null;queueSuggest(quick.value,'end',null);setTimeout(()=>{const host=$('topSuggestions');host.replaceChildren();const old=$('suggestions');Array.from(old.querySelectorAll('button')).forEach(b=>{const copy=b.cloneNode(true);copy.onclick=()=>{b.click();quick.value=$('endInput').value;host.style.display='none';closeOverlays()};host.append(copy)});host.style.display=host.children.length?'block':'none'},650)});
+$('quickFind').onclick=()=>{ $('endInput').value=quick.value;openPanel();searchAddress('end',null,quick.value);setTimeout(()=>$('endInput').scrollIntoView({block:'center'}),50)};
+quick.addEventListener('keydown',e=>{if(e.key==='Enter')$('quickFind').click()});
+let pinPoint=null,pinMarker=null;
+map.on('contextmenu',e=>{
+ pinPoint={lat:e.latlng.lat,lon:e.latlng.lng,name:'Punkt wskazany na mapie'};
+ if(pinMarker)map.removeLayer(pinMarker);
+ pinMarker=L.marker(e.latlng,{draggable:true}).addTo(map);
+ pinMarker.on('dragend',()=>{const ll=pinMarker.getLatLng();pinPoint.lat=ll.lat;pinPoint.lon=ll.lng});
+ $('pinActions').style.display='block';
+});
+$('pinCancel').onclick=()=>{$('pinActions').style.display='none';if(pinMarker){map.removeLayer(pinMarker);pinMarker=null}};
+$('pinGoal').onclick=()=>{setGoal(pinPoint);$('quickAddress').value=pinPoint.name;$('pinActions').style.display='none';openPanel()};
+$('pinStop').onclick=()=>{if(!pinPoint)return;if(!endPoint){alert('Najpierw wybierz cel trasy.');return}makeStop();if(!stops.length)return;stops[stops.length-1].point={...pinPoint};renderStops();$('pinActions').style.display='none';if(!document.body.classList.contains('editing'))openPanel()};
+$('pinSave').onclick=()=>{savePoint(pinPoint,'favorites');$('pinActions').style.display='none'};
+/* Prędkość GPS; limit pozostaje nieznany, dopóki brak wiarygodnego źródła */
+const previousOnPosition=onPosition;
+onPosition=function(p){previousOnPosition(p);$('liveSpeed').textContent=Number.isFinite(p.coords.speed)&&p.coords.speed>=0?String(Math.round(p.coords.speed*3.6)):'—';$('liveGps').textContent='●'};
+/* zapis trasy po obliczeniu; bez wpływu na oryginalny mechanizm trasowania */
+const saveRouteButton=document.createElement('button');saveRouteButton.id='saveRoute';saveRouteButton.className='secondary';saveRouteButton.textContent='☆ Zapisz aktualną trasę';$('calculate').after(saveRouteButton);
+saveRouteButton.onclick=()=>{if(!routeCoords.length||!endPoint){alert('Najpierw wyznacz trasę.');return}const name=prompt('Nazwa trasy:',endPoint.name);if(!name?.trim())return;const saved=JSON.parse(localStorage.getItem('navitras-routes-v1')||'[]');saved.unshift({name:name.trim(),end:{...endPoint},start:startPoint?{...startPoint}:null,startMode:$('startMode').value,stops:stops.map(s=>({id:s.id,point:s.point}))});localStorage.setItem('navitras-routes-v1',JSON.stringify(saved.slice(0,50)));alert('Zapisano trasę do ponownego wyznaczenia.')};
+const originalSpeak=speak;
+speak=function(message){if(!$('voice').checked||!('speechSynthesis' in window))return;try{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(message);const wanted=localStorage.getItem('navitras-voice');const voice=speechSynthesis.getVoices().find(v=>v.name===wanted);if(voice){u.voice=voice;u.lang=voice.lang}else u.lang='pl-PL';speechSynthesis.speak(u)}catch(e){}};
+
+
+/* NAVITRAS 1.3 – warianty tras, wybór i prowadzenie po zatwierdzeniu */
+function showRouteAlternatives(){
+ alternativeLayers.forEach(l=>map.removeLayer(l));alternativeLayers=[];
+ if(!routeAlternatives.length)return;
+ routeAlternatives.forEach((r,i)=>{
+  if(i===selectedRouteIndex)return;
+  const layer=L.geoJSON(r.geometry,{style:{color:i%2?'#8dc8ff':'#b7d9f7',weight:5,opacity:.88}});
+  layer.addTo(map);layer.bringToBack();
+  layer.on('click',()=>chooseRoute(i));
+  alternativeLayers.push(layer);
+ });
+ if(routeLayer)routeLayer.bringToFront();
+ const host=$('routeChoiceButtons');host.replaceChildren();
+ routeAlternatives.forEach((r,i)=>{
+  const b=document.createElement('button');b.className='choice'+(i===selectedRouteIndex?' selected':'');
+  const km=(r.distance/1000).toLocaleString('pl-PL',{maximumFractionDigits:1});
+  b.textContent=(i===0?'● Trasa zalecana':`○ Alternatywa ${i}`)+'  '+Math.floor(r.duration/3600)+' h '+String(Math.round(r.duration/60)%60).padStart(2,'0')+' min  ·  '+km+' km';
+  b.onclick=()=>chooseRoute(i);host.append(b);
+ });
+ const r=routeAlternatives[selectedRouteIndex];
+ $('routeChoiceInfo').textContent='Wybrano: '+(r.distance/1000).toFixed(1)+' km · '+Math.round(r.duration/60)+' min. Bez danych o korkach. Możesz zmienić trasę pinezką.';
+ $('routeChoices').style.display='block';$('routeChoices').classList.add('compact');$('toggleChoices').textContent='⌃ Trasy do celu';$('editBar').style.display='none';$('editBanner').style.display='none';
+ $('liveDistance').textContent=(r.distance/1000).toFixed(1)+' km';
+}
+function chooseRoute(i){
+ if(!routeAlternatives[i])return;
+ if(previewOn){$('startPreview').click();document.body.classList.remove('guiding')}
+ selectedRouteIndex=i;installRoute(routeAlternatives[i]);showRouteAlternatives();
+ map.fitBounds(routeLayer.getBounds(),{padding:[70,70]});
+}
+$('leadRoute').onclick=()=>{
+ if(!routeCoords.length){alert('Najpierw wyznacz trasę.');return}
+ if($('startMode').value!=='gps'){alert('Prowadzenie GPS wymaga startu z aktualnej lokalizacji. Wybierz „Moja lokalizacja” i wyznacz trasę ponownie.');openPanel();return}
+ if(!previewOn)$('startPreview').click();
+ if(previewOn){document.body.classList.add('guiding');$('leadRoute').style.display='none';$('stopGuidance').style.display='inline-block';closeOverlays();$('navBanner').style.display='block'}
+};
+$('stopGuidance').onclick=()=>{
+ if(previewOn)$('startPreview').click();
+ document.body.classList.remove('guiding');$('leadRoute').style.display='inline-block';$('stopGuidance').style.display='none';
+};
+$('editRoute').onclick=()=>{
+ if(previewOn)$('stopGuidance').click();
+ $('routeChoices').style.display='none';
+ $('editBar').style.display='flex';$('editBanner').style.display='block';document.body.classList.add('editing');
+};
+$('toggleChoices').onclick=()=>{
+ $('routeChoices').classList.toggle('compact');
+ $('toggleChoices').textContent=$('routeChoices').classList.contains('compact')?'⌃ Trasy do celu':'⌄ Zwiń trasy';
+};
+$('recalcMap').onclick=()=>{if(!endPoint)return; if(stops.some(x=>!x.point)){alert('Uzupełnij lub usuń puste punkty pośrednie.');openPanel();return} $('calculate').click();};
+$('saveEdit').onclick=()=>{if(!endPoint)return;saveRouteButton.click()};
+function cancelRouteEdit(){document.body.classList.remove('editing');$('editBar').style.display='none';$('editBanner').style.display='none';$('pinActions').style.display='none';if(pinMarker){map.removeLayer(pinMarker);pinMarker=null}if(routeCoords.length)$('routeChoices').style.display='block'}
+$('cancelEdit').onclick=cancelRouteEdit;
+$('cancelEditBottom').onclick=cancelRouteEdit;
+
+/* Wyczyść tylko bieżącą trasę, nie zapisane miejsca ani profil. */
+$('deleteRouteMap').onclick=()=>{
+ if(!confirm('Usunąć bieżącą trasę i wrócić do mapy głównej?'))return;
+ $('clearRoute').click();
+ $('quickAddress').value='';
+ $('topSuggestions').replaceChildren();$('topSuggestions').style.display='none';
+ $('pinActions').style.display='none';$('editBar').style.display='none';$('editBanner').style.display='none';
+ if(pinMarker){map.removeLayer(pinMarker);pinMarker=null}pinPoint=null;
+ routePlanningPoints=[];selectedRouteIndex=0;
+ $('liveDistance').textContent='—';
+ if('speechSynthesis' in window)speechSynthesis.cancel();
+ closeOverlays();
+ setFollow(true);
+ if(lastPosition)map.setView(lastPosition,14);
+ else map.setView([51.033,2.864],10);
+ setTimeout(()=>map.invalidateSize(),180);
+};
+const oldPinStop=$('pinStop').onclick;
+$('pinStop').onclick=()=>{
+ oldPinStop();
+ if(routeCoords.length){$('editBar').style.display='flex';$('editBanner').style.display='block';document.body.classList.add('editing');$('routeChoices').style.display='none';const msg=$('routeInfo');msg.textContent='Dodano pinezkę jako punkt pośredni. Kliknij „Wyznacz trasę”, aby przeliczyć przebieg.'}
+};
+
+
+/* NAVITRAS 1.8: kompas oraz profil osobowy jako domyślny */
+const compass=document.createElement('button');compass.id='navCompass';compass.type='button';compass.title='Kompas: północ u góry';compass.setAttribute('aria-label','Kompas');compass.innerHTML='<span id="compassNeedle">▲</span><small>N</small>';
+document.body.appendChild(compass);
+const compassStyle=document.createElement('style');compassStyle.textContent='#navCompass{position:absolute;right:16px;top:112px;z-index:1200;background:#101b2de8;color:#fff;border:1px solid #65778a;border-radius:50%;width:58px;height:58px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;font-weight:800;box-shadow:0 2px 8px #0006}#navCompass span{color:#fa5555;font-size:24px;line-height:23px}#navCompass small{font-size:11px}';document.head.appendChild(compassStyle);
+let compassHeading=0;compass.onclick=()=>{compassHeading=0;document.getElementById('compassNeedle').style.transform='rotate(0deg)';map.setBearing?.(0)};
+if(navigator.geolocation)navigator.geolocation.watchPosition(p=>{if(Number.isFinite(p.coords.heading)&&p.coords.speed>1){compassHeading=p.coords.heading;document.getElementById('compassNeedle').style.transform='rotate('+(-compassHeading)+'deg)'}},()=>{},{enableHighAccuracy:true,maximumAge:2500});
+$('vehicleType').value='car';$('vehicleQuick').textContent='🚗 Auto';
+/* NAVITRAS 1.7: nowy widok HUD i ustawienia, bez pozorowania danych drogowych */
+const mapTheme=document.getElementById('mapTheme'),routeColor=document.getElementById('routeColor');
+mapTheme.value=localStorage.getItem('navitras-theme')||'auto';tileMode=mapTheme.value;updateTiles();
+mapTheme.addEventListener('change',()=>{tileMode=mapTheme.value;localStorage.setItem('navitras-theme',tileMode);updateTiles()});
+routeColor.value=localStorage.getItem('navitras-color')||'#3189ff';
+routeColor.addEventListener('input',()=>{localStorage.setItem('navitras-color',routeColor.value);if(routeLayer?.setStyle)routeLayer.setStyle({color:routeColor.value})});
+const originalInstallRoute=installRoute;installRoute=function(r){originalInstallRoute(r);if(routeLayer?.setStyle)routeLayer.setStyle({color:routeColor.value});const mins=Math.ceil(r.duration/60);document.getElementById('etaKm').textContent=(r.distance/1000).toFixed(1).replace('.',',')+' km';document.getElementById('etaMins').textContent=mins+' min';document.getElementById('etaTime').textContent=new Date(Date.now()+r.duration*1000).toLocaleTimeString('pl-BE',{hour:'2-digit',minute:'2-digit'});};
+const hudOriginalSpeak=speak;speak=function(msg){if(document.getElementById('navLanguage').value==='pl-PL'){hudOriginalSpeak(msg)}else{const sel=document.getElementById('navLanguage').value;const voices=speechSynthesis.getVoices();const v=voices.find(x=>x.lang===sel);if(!v)return;const u=new SpeechSynthesisUtterance(msg);u.voice=v;u.lang=sel;speechSynthesis.cancel();speechSynthesis.speak(u)}};
+const observer=new MutationObserver(()=>{document.body.classList.toggle('hud-guiding',document.body.classList.contains('guiding')||previewOn)});observer.observe(document.body,{attributes:true,attributeFilter:['class']});
+setInterval(()=>{if(tileMode==='auto')updateTiles()},60000);
+</script></body></html>
